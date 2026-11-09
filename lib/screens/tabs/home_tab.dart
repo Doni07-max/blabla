@@ -17,7 +17,7 @@ class _HomeTabState extends State<HomeTab> {
   @override
   void initState() {
     super.initState();
-    postServices.batchAddPosts(postsData);
+    postServices.batchAddPosts(postsData); // 20 постов из posts_data.dart
     postServices.batchAddStories(storiesData);
   }
 
@@ -28,17 +28,23 @@ class _HomeTabState extends State<HomeTab> {
       appBar: AppBar(
         title: const Text('Instagram'),
       ),
-      body: ListView.builder(
-        itemCount: postServices.posts.length + 1,
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            return StoriesList(stories: postServices.stories);
-          }
-          return Padding(
-            padding: const EdgeInsets.all(4.0),
-            child: PostWidget(post: postServices.posts[index - 1]),
-          );
-        },
+      body: Column(
+        children: [
+          // Сторисы под AppBar
+          StoriesList(stories: postServices.stories),
+          // Лента постов
+          Expanded(
+            child: ListView.builder(
+              itemCount: postServices.posts.length,
+              itemBuilder: (context, index) {
+                return Padding(
+                  padding: const EdgeInsets.all(4.0),
+                  child: PostWidget(post: postServices.posts[index]),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

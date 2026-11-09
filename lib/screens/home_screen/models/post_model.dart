@@ -7,7 +7,7 @@ class PostModel {
   int? likeCount;
   int? commentCount;
   final String? description;
-  final List<CommentModel> comments;
+  final List<CommentModel> comments; // свои комментарии у каждого поста
 
   PostModel({
     this.username,
@@ -16,15 +16,10 @@ class PostModel {
     this.likeCount,
     this.commentCount,
     this.description,
-    List<CommentModel>? comments,
-  }) : comments = comments ?? [];
+    this.comments = const [],
+  });
 
   void addLike(int newCount) {
     likeCount = newCount;
-  }
-
-  void addComment(CommentModel comment) {
-    comments.add(comment);
-    commentCount = comments.length;
   }
 }

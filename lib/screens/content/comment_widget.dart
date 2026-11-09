@@ -7,30 +7,12 @@ class CommentWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundImage: NetworkImage(comment.avatarUrl),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  comment.username,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(comment.text),
-              ],
-            ),
-          ),
-        ],
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundImage: NetworkImage(comment.avatarUrl),
       ),
+      title: Text(comment.username),
+      subtitle: Text(comment.text),
     );
   }
 }

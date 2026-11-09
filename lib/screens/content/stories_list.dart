@@ -8,10 +8,8 @@ class StoriesList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 105,
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 6),
+    return SizedBox(
+      height: 100,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: stories.length,

@@ -1,5 +1,4 @@
 import "package:android_dev/screens/content/comment_widget.dart";
-import "package:android_dev/screens/home_screen/models/comment_model.dart";
 import "package:android_dev/screens/home_screen/models/post_model.dart";
 import "package:flutter/material.dart";
 
@@ -13,91 +12,20 @@ class PostWidget extends StatefulWidget {
 
 class _PostWidgetState extends State<PostWidget> {
   bool isLiked = false;
-  final TextEditingController commentController = TextEditingController();
 
-  @override
-  void dispose() {
-    commentController.dispose();
-    super.dispose();
-  }
-
-  void openBottomSheet() {
+  // Открывает снизу список комментариев этого поста
+  void openComments() {
+    final comments = widget.post?.comments ?? [];
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            final comments = widget.post?.comments ?? [];
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: SizedBox(
-                height: MediaQuery.of(context).size.height * 0.6,
-                child: Column(
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Text(
-                        'Комментарии',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Expanded(
-                      child: comments.isEmpty
-                          ? const Center(child: Text('Пока нет комментариев'))
-                          : ListView.builder(
-                              itemCount: comments.length,
-                              itemBuilder: (context, index) {
-                                return CommentWidget(comment: comments[index]);
-                              },
-                            ),
-                    ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: commentController,
-                              decoration: const InputDecoration(
-                                hintText: 'Добавьте комментарий...',
-                                border: InputBorder.none,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.send),
-                            onPressed: () {
-                              if (commentController.text.trim().isEmpty) {
-                                return;
-                              }
-                              widget.post?.addComment(
-                                CommentModel(
-                                  username: 'me',
-                                  avatarUrl: 'https://i.pravatar.cc/150?img=68',
-                                  text: commentController.text.trim(),
-                                ),
-                              );
-                              commentController.clear();
-                              setSheetState(() {});
-                              setState(() {});
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
+      builder: (context) {
+        if (comments.isEmpty) {
+          return const Center(child: Text('Пока нет комментариев'));
+        }
+        return ListView.builder(
+          itemCount: comments.length,
+          itemBuilder: (context, index) {
+            return CommentWidget(comment: comments[index]);
           },
         );
       },
@@ -123,32 +51,27 @@ class _PostWidgetState extends State<PostWidget> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 5, bottom: 8),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundImage: NetworkImage(
-                    widget.post?.avatarUrl ?? 'https://i.pravatar.cc/150',
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  widget.post?.username ?? '',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
+          // Аватар и имя автора
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundImage: NetworkImage(widget.post?.avatarUrl ?? ''),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                widget.post?.username ?? '',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
           ),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8.0),
-            child: Image.network(
-              widget.post?.imageUrl ?? 'https://picsum.photos/600/400',
-              width: double.infinity,
-              fit: BoxFit.cover,
-            ),
+          const SizedBox(height: 8),
+          // Картинка поста
+          Image.network(
+            widget.post?.imageUrl ?? '',
+            width: double.infinity,
+            fit: BoxFit.cover,
           ),
+          // Кнопки лайк и комментарии
           Row(
             children: [
               IconButton(
@@ -169,44 +92,19 @@ class _PostWidgetState extends State<PostWidget> {
               ),
               IconButton(
                 icon: const Icon(Icons.comment),
-                onPressed: () {
-                  openBottomSheet();
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.share),
-                onPressed: () {},
-              ),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.bookmark_border),
-                onPressed: () {},
+                onPressed: openComments,
               ),
             ],
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Нравится: ${widget.post?.likeCount ?? 0}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  widget.post?.description ?? '',
-                  style: const TextStyle(fontSize: 16.0),
-                ),
-                const SizedBox(height: 4),
-                GestureDetector(
-                  onTap: openBottomSheet,
-                  child: Text(
-                    'Посмотреть все комментарии (${widget.post?.comments.length ?? 0})',
-                    style: const TextStyle(color: Colors.grey),
-                  ),
-                ),
-              ],
+          Text(
+            'Нравится: ${widget.post?.likeCount ?? 0}',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          Text(widget.post?.description ?? ''),
+          TextButton(
+            onPressed: openComments,
+            child: Text(
+              'Комментарии (${widget.post?.comments.length ?? 0})',
             ),
           ),
         ],

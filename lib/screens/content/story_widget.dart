@@ -8,36 +8,14 @@ class StoryWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6),
+      padding: const EdgeInsets.all(6),
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(3),
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [Colors.orange, Colors.pink, Colors.purple],
-              ),
-            ),
-            child: CircleAvatar(
-              radius: 30,
-              backgroundColor: Colors.white,
-              child: CircleAvatar(
-                radius: 28,
-                backgroundImage: NetworkImage(story.avatarUrl),
-              ),
-            ),
+          CircleAvatar(
+            radius: 30,
+            backgroundImage: NetworkImage(story.avatarUrl),
           ),
-          const SizedBox(height: 4),
-          SizedBox(
-            width: 70,
-            child: Text(
-              story.username,
-              style: const TextStyle(fontSize: 12),
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-            ),
-          ),
+          Text(story.username, style: const TextStyle(fontSize: 12)),
         ],
       ),
     );
