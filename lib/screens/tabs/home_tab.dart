@@ -8,19 +8,25 @@ class HomeTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final posts = ref.watch(feedControllerProvider);
+    final posts = ref.watch(feedPostsProvider);
     return Scaffold(
       backgroundColor: Colors.grey[200],
       appBar: AppBar(title: const Text('Instagram')),
-      body: ListView.builder(
-        itemCount: posts.length,
-        itemBuilder: (context, index) => Padding(
-          padding: const EdgeInsets.all(4),
-          child: PostWidget(
-            post: posts[index],
-            onLike: () => ref.read(feedControllerProvider.notifier).toggleLike(posts[index].id),
-          ),
-        ),
+      body: posts.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => Center(child: Text('Could not load posts: $error')),
+        data: (items) => items.isEmpty
+            ? const Center(child: Text('No posts yet. Create your first post.'))
+            : ListView.builder(
+                itemCount: items.length,
+                itemBuilder: (context, index) => Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: PostWidget(
+                    post: items[index],
+                    onLike: () => ref.read(feedControllerProvider).toggleLike(items[index].id),
+                  ),
+                ),
+              ),
       ),
     );
   }

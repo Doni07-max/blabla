@@ -1,7 +1,8 @@
 import "package:android_dev/screens/tabs/home_tab.dart";
-import "package:android_dev/screens/tabs/placeholder_tab.dart";
 import "package:android_dev/screens/tabs/search_tab.dart";
 import "package:android_dev/screens/tabs/profile_tab.dart";
+import "package:android_dev/screens/tabs/new_post_tab.dart";
+import "package:android_dev/screens/tabs/activity_tab.dart";
 import "package:android_dev/widgets/animated_indexed_stack.dart";
 import "package:material_ui/material_ui.dart";
 
@@ -18,8 +19,8 @@ class _MainScreenState extends State<MainScreen> {
   static const _pages = [
     HomeTab(),
     SearchTab(),
-    PlaceholderTab(title: 'New post', icon: Icons.add_box),
-    PlaceholderTab(title: 'Activity', icon: Icons.favorite_border),
+    NewPostTab(),
+    ActivityTab(),
     ProfileTab(),
   ];
 
