@@ -1,5 +1,5 @@
 import 'package:android_dev/screens/home_screen/models/post_model.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class PostWidget extends StatelessWidget {
   final PostModel post;

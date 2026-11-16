@@ -1,6 +1,6 @@
 import "package:android_dev/screens/home_screen/services/dio_service.dart";
 import "package:android_dev/widgets/image_grid_item.dart";
-import "package:flutter/material.dart";
+import "package:material_ui/material_ui.dart";
 
 class SearchTab extends StatefulWidget {
   const new({super.key});
