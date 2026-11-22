@@ -27,7 +27,13 @@ class UserProfiles extends Table {
 
 @DriftDatabase(tables: [CachedPosts, UserProfiles])
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(driftDatabase(name: 'social_app'));
+  // shareAcrossIsolates: the UI and the workmanager background isolate use one
+  // connection, so writes made by a background task also update the UI's watch() streams.
+  AppDatabase()
+      : super(driftDatabase(
+          name: 'social_app',
+          native: const DriftNativeOptions(shareAcrossIsolates: true),
+        ));
 
   @override
   int get schemaVersion => 1;
