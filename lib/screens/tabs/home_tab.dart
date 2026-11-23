@@ -1,3 +1,4 @@
+import 'package:android_dev/core/auth/auth_service.dart';
 import 'package:android_dev/screens/content/post_widget.dart';
 import 'package:android_dev/screens/home_screen/state/feed_controller.dart';
 import 'package:material_ui/material_ui.dart';
@@ -18,6 +19,7 @@ class HomeTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final posts = ref.watch(feedPostsProvider);
+    final userId = ref.watch(currentUserIdProvider);
     return Scaffold(
       backgroundColor: Colors.grey[200],
       appBar: AppBar(title: const Text('Instagram')),
@@ -37,6 +39,9 @@ class HomeTab extends ConsumerWidget {
                         child: PostWidget(
                           post: items[index],
                           onLike: () => ref.read(feedControllerProvider).toggleLike(items[index].id),
+                          onDelete: items[index].authorId == userId
+                              ? () => ref.read(feedControllerProvider).deletePost(items[index].id)
+                              : null,
                         ),
                       ),
                     ),

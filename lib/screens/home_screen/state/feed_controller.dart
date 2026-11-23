@@ -1,50 +1,49 @@
+import 'package:android_dev/core/auth/auth_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:android_dev/core/db/app_database.dart';
-import '../services/local_data_service.dart';
+import '../models/comment_model.dart';
 import '../models/post_model.dart';
+import '../services/local_data_service.dart';
 
-extension CachedPostMapper on CachedPost {
-  PostModel toModel() => PostModel(
-        id: id,
-        imageUrl: imageUrl,
-        description: caption,
-        authorId: authorId,
-        authorName: authorName,
-        likeCount: likes,
-        isLiked: isLiked,
-      );
-}
-
+/// The feed as seen by the signed-in user (empty when logged out).
 final feedPostsProvider = StreamProvider<List<PostModel>>((ref) {
-  return ref.watch(localDataServiceProvider).watchPosts().map(
-        (posts) => posts.map((post) => post.toModel()).toList(),
-      );
+  final userId = ref.watch(currentUserIdProvider);
+  if (userId == null) return Stream.value(const []);
+  return ref.watch(localDataServiceProvider).watchFeed(userId);
 });
 
+final commentsProvider =
+    StreamProvider.autoDispose.family<List<CommentModel>, int>(
+  (ref, postId) => ref.watch(localDataServiceProvider).watchComments(postId),
+);
+
+/// Write actions on posts, always performed as the signed-in user.
 class FeedController {
-  FeedController(this._localData);
+  FeedController(this._ref);
 
-  final LocalDataService _localData;
+  final Ref _ref;
 
-  Future<void> toggleLike(String id) async {
-    final post = await _localData.getPost(id);
-    if (post != null) await _localData.toggleLike(post);
+  LocalDataService get _localData => _ref.read(localDataServiceProvider);
+
+  int get _userId {
+    final id = _ref.read(currentUserIdProvider);
+    if (id == null) throw const AuthException('You need to log in first.');
+    return id;
   }
 
-  Future<void> createPost({required String imageUrl, required String caption}) {
-    final now = DateTime.now().microsecondsSinceEpoch;
-    return _localData.savePost(
-      CachedPostsCompanion.insert(
-        id: 'post-$now',
-        authorId: 'me',
-        authorName: 'alimhan',
-        imageUrl: imageUrl,
-        caption: caption,
-      ),
-    );
-  }
+  Future<void> toggleLike(int postId) =>
+      _localData.toggleLike(postId: postId, userId: _userId);
+
+  Future<void> createPost({required String imageUrl, required String caption}) =>
+      _localData.createPost(authorId: _userId, imageUrl: imageUrl, caption: caption);
+
+  Future<void> deletePost(int postId) =>
+      _localData.deletePost(postId: postId, userId: _userId);
+
+  Future<void> addComment({required int postId, required String body}) =>
+      _localData.addComment(postId: postId, authorId: _userId, body: body);
+
+  Future<void> deleteComment(int commentId) =>
+      _localData.deleteComment(commentId: commentId, userId: _userId);
 }
 
-final feedControllerProvider = Provider<FeedController>(
-  (ref) => FeedController(ref.watch(localDataServiceProvider)),
-);
+final feedControllerProvider = Provider<FeedController>(FeedController.new);

@@ -1,117 +1,145 @@
-import 'dart:async';
-
 import 'package:android_dev/core/db/app_database.dart';
 import 'package:android_dev/core/db/database_provider.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/comment_model.dart';
+import '../models/post_model.dart';
 
-/// Local persistence API for posts and profiles. Kept independent of widgets.
+/// Local persistence API for posts, likes, comments and profiles.
+/// Kept independent of widgets.
 class LocalDataService {
-  LocalDataService(this._database);
+  LocalDataService(this._db);
 
-  final AppDatabase _database;
-  final _commentChanges = StreamController<String>.broadcast();
-  late final Future<void> _commentsTableReady = _database.customStatement('''
-    CREATE TABLE IF NOT EXISTS post_comments (
-      id TEXT PRIMARY KEY NOT NULL,
-      post_id TEXT NOT NULL,
-      author_name TEXT NOT NULL,
-      body TEXT NOT NULL,
-      created_at INTEGER NOT NULL
-    )
-  ''');
+  final AppDatabase _db;
 
-  Stream<List<CachedPost>> watchPosts() {
-    final query = _database.select(_database.cachedPosts)
-      // IDs include the creation timestamp, so this keeps newest local posts first.
-      ..orderBy([(post) => OrderingTerm.desc(post.id)]);
-    return query.watch();
-  }
+  // ---------------------------------------------------------------- posts
 
-  Future<List<CachedPost>> getPosts() => _database.select(_database.cachedPosts).get();
-
-  Future<CachedPost?> getPost(String id) =>
-      (_database.select(_database.cachedPosts)..where((post) => post.id.equals(id))).getSingleOrNull();
-
-  Future<void> savePost(CachedPostsCompanion post) =>
-      _database.into(_database.cachedPosts).insertOnConflictUpdate(post);
-
-  Future<void> savePosts(List<CachedPostsCompanion> posts) async {
-    await _database.batch((batch) => batch.insertAllOnConflictUpdate(_database.cachedPosts, posts));
-  }
-
-  Future<void> deletePost(String id) =>
-      (_database.delete(_database.cachedPosts)..where((post) => post.id.equals(id))).go();
-
-  Future<void> toggleLike(CachedPost post) {
-    final isLiked = !post.isLiked;
-    return (_database.update(_database.cachedPosts)..where((row) => row.id.equals(post.id))).write(
-      CachedPostsCompanion(
-        isLiked: Value(isLiked),
-        likes: Value(post.likes + (isLiked ? 1 : -1)),
-      ),
-    );
-  }
-
-  Stream<List<UserProfile>> watchProfiles() => _database.select(_database.userProfiles).watch();
-
-  Future<UserProfile?> getProfile(String id) =>
-      (_database.select(_database.userProfiles)..where((profile) => profile.id.equals(id))).getSingleOrNull();
-
-  Future<void> saveProfile(UserProfilesCompanion profile) =>
-      _database.into(_database.userProfiles).insertOnConflictUpdate(profile);
-
-  Stream<UserProfile?> watchProfile(String id) =>
-      (_database.select(_database.userProfiles)..where((profile) => profile.id.equals(id)))
-          .watchSingleOrNull();
-
-  Future<List<CommentModel>> getComments(String postId) async {
-    await _commentsTableReady;
-    final rows = await _database.customSelect(
-      'SELECT id, author_name, body, created_at FROM post_comments WHERE post_id = ? ORDER BY created_at ASC',
-      variables: [Variable.withString(postId)],
-    ).get();
-    return rows
-        .map((row) => CommentModel(
-              id: row.read<String>('id'),
-              authorName: row.read<String>('author_name'),
-              body: row.read<String>('body'),
-              createdAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('created_at')),
+  /// All posts, newest first, with their author, like/comment counts and
+  /// whether [viewerId] liked each one. Re-emits whenever any of the
+  /// underlying tables change, so likes and comments update the feed live.
+  Stream<List<PostModel>> watchFeed(int viewerId) {
+    return _db.customSelect(
+      '''
+      SELECT p.id, p.author_id, p.image_url, p.caption, p.created_at,
+             u.display_name, u.avatar_url,
+             (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS like_count,
+             (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count,
+             EXISTS (SELECT 1 FROM post_likes l
+                     WHERE l.post_id = p.id AND l.user_id = ?) AS is_liked
+      FROM posts p
+      JOIN users u ON u.id = p.author_id
+      ORDER BY p.created_at DESC, p.id DESC
+      ''',
+      variables: [Variable.withInt(viewerId)],
+      readsFrom: {_db.posts, _db.users, _db.postLikes, _db.comments},
+    ).watch().map((rows) => rows
+        .map((row) => PostModel(
+              id: row.read<int>('id'),
+              authorId: row.read<int>('author_id'),
+              imageUrl: row.read<String>('image_url'),
+              description: row.read<String>('caption'),
+              createdAt: row.read<DateTime>('created_at'),
+              authorName: row.read<String>('display_name'),
+              authorAvatarUrl: row.readNullable<String>('avatar_url'),
+              likeCount: row.read<int>('like_count'),
+              commentCount: row.read<int>('comment_count'),
+              isLiked: row.read<bool>('is_liked'),
             ))
-        .toList();
+        .toList());
   }
 
-  Stream<List<CommentModel>> watchComments(String postId) async* {
-    yield await getComments(postId);
-    await for (final changedPostId in _commentChanges.stream) {
-      if (changedPostId == postId) yield await getComments(postId);
-    }
+  Future<int> createPost({
+    required int authorId,
+    required String imageUrl,
+    required String caption,
+  }) =>
+      _db.into(_db.posts).insert(PostsCompanion.insert(
+            authorId: authorId,
+            imageUrl: imageUrl,
+            caption: Value(caption),
+          ));
+
+  /// Deletes the post if [userId] owns it. Its likes and comments are
+  /// removed by ON DELETE CASCADE.
+  Future<void> deletePost({required int postId, required int userId}) =>
+      (_db.delete(_db.posts)
+            ..where((p) => p.id.equals(postId) & p.authorId.equals(userId)))
+          .go();
+
+  // ---------------------------------------------------------------- likes
+
+  Future<void> toggleLike({required int postId, required int userId}) {
+    return _db.transaction(() async {
+      final removed = await (_db.delete(_db.postLikes)
+            ..where((l) => l.postId.equals(postId) & l.userId.equals(userId)))
+          .go();
+      if (removed == 0) {
+        await _db.into(_db.postLikes).insert(
+              PostLikesCompanion.insert(postId: postId, userId: userId),
+            );
+      }
+    });
   }
 
-  Future<void> addComment({required String postId, required String body}) async {
-    await _commentsTableReady;
-    final now = DateTime.now();
-    await _database.customStatement(
-      'INSERT INTO post_comments (id, post_id, author_name, body, created_at) VALUES (?, ?, ?, ?, ?)',
-      [
-        Variable.withString('comment-${now.microsecondsSinceEpoch}'),
-        Variable.withString(postId),
-        Variable.withString('alimhan'),
-        Variable.withString(body),
-        Variable.withInt(now.millisecondsSinceEpoch),
-      ],
-    );
-    _commentChanges.add(postId);
+  // ------------------------------------------------------------- comments
+
+  Stream<List<CommentModel>> watchComments(int postId) {
+    final query = _db.select(_db.comments).join([
+      innerJoin(_db.users, _db.users.id.equalsExp(_db.comments.authorId)),
+    ])
+      ..where(_db.comments.postId.equals(postId))
+      ..orderBy([
+        OrderingTerm.asc(_db.comments.createdAt),
+        OrderingTerm.asc(_db.comments.id),
+      ]);
+    return query.watch().map((rows) => rows.map((row) {
+          final comment = row.readTable(_db.comments);
+          final author = row.readTable(_db.users);
+          return CommentModel(
+            id: comment.id,
+            postId: comment.postId,
+            authorId: author.id,
+            authorName: author.displayName,
+            authorAvatarUrl: author.avatarUrl,
+            body: comment.body,
+            createdAt: comment.createdAt,
+          );
+        }).toList());
   }
 
-  void dispose() => _commentChanges.close();
+  Future<void> addComment({
+    required int postId,
+    required int authorId,
+    required String body,
+  }) =>
+      _db.into(_db.comments).insert(CommentsCompanion.insert(
+            postId: postId,
+            authorId: authorId,
+            body: body,
+          ));
+
+  Future<void> deleteComment({required int commentId, required int userId}) =>
+      (_db.delete(_db.comments)
+            ..where((c) => c.id.equals(commentId) & c.authorId.equals(userId)))
+          .go();
+
+  // ------------------------------------------------------------- profiles
+
+  Future<void> updateProfile({
+    required int userId,
+    required String displayName,
+    String? avatarUrl,
+    String bio = '',
+  }) =>
+      (_db.update(_db.users)..where((u) => u.id.equals(userId))).write(
+        UsersCompanion(
+          displayName: Value(displayName),
+          avatarUrl: Value(avatarUrl),
+          bio: Value(bio),
+        ),
+      );
 }
 
 final localDataServiceProvider = Provider<LocalDataService>(
-  (ref) {
-    final service = LocalDataService(ref.watch(databaseProvider));
-    ref.onDispose(service.dispose);
-    return service;
-  },
+  (ref) => LocalDataService(ref.watch(databaseProvider)),
 );

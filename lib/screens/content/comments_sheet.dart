@@ -1,16 +1,13 @@
-import 'package:android_dev/screens/home_screen/services/local_data_service.dart';
-import 'package:android_dev/screens/home_screen/models/comment_model.dart';
+import 'package:android_dev/core/auth/auth_service.dart';
+import 'package:android_dev/screens/home_screen/state/feed_controller.dart';
+import 'package:android_dev/widgets/user_avatar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
-
-final commentsProvider = StreamProvider.autoDispose.family<List<CommentModel>, String>(
-  (ref, postId) => ref.watch(localDataServiceProvider).watchComments(postId),
-);
 
 class CommentsSheet extends ConsumerStatefulWidget {
   const CommentsSheet({super.key, required this.postId});
 
-  final String postId;
+  final int postId;
 
   @override
   ConsumerState<CommentsSheet> createState() => _CommentsSheetState();
@@ -18,6 +15,7 @@ class CommentsSheet extends ConsumerStatefulWidget {
 
 class _CommentsSheetState extends ConsumerState<CommentsSheet> {
   final _controller = TextEditingController();
+  bool _isSending = false;
 
   @override
   void dispose() {
@@ -27,17 +25,20 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
 
   Future<void> _submit() async {
     final body = _controller.text.trim();
-    if (body.isEmpty) return;
-    await ref.read(localDataServiceProvider).addComment(
-          postId: widget.postId,
-          body: body,
-        );
-    _controller.clear();
+    if (body.isEmpty || _isSending) return;
+    setState(() => _isSending = true);
+    try {
+      await ref.read(feedControllerProvider).addComment(postId: widget.postId, body: body);
+      _controller.clear();
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final comments = ref.watch(commentsProvider(widget.postId));
+    final userId = ref.watch(currentUserIdProvider);
     return SafeArea(
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * .7,
@@ -55,10 +56,28 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
                     ? const Center(child: Text('Be the first to comment.'))
                     : ListView.builder(
                         itemCount: items.length,
-                        itemBuilder: (context, index) => ListTile(
-                          title: Text(items[index].authorName),
-                          subtitle: Text(items[index].body),
-                        ),
+                        itemBuilder: (context, index) {
+                          final comment = items[index];
+                          return ListTile(
+                            leading: UserAvatar(
+                              name: comment.authorName,
+                              imageUrl: comment.authorAvatarUrl,
+                              radius: 18,
+                            ),
+                            title: Text(comment.authorName,
+                                style: const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text(comment.body),
+                            trailing: comment.authorId == userId
+                                ? IconButton(
+                                    icon: const Icon(Icons.delete_outline),
+                                    tooltip: 'Delete comment',
+                                    onPressed: () => ref
+                                        .read(feedControllerProvider)
+                                        .deleteComment(comment.id),
+                                  )
+                                : null,
+                          );
+                        },
                       ),
               ),
             ),
@@ -69,12 +88,19 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
                   Expanded(
                     child: TextField(
                       controller: _controller,
+                      maxLength: 1000,
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _submit(),
-                      decoration: const InputDecoration(hintText: 'Add a comment...'),
+                      decoration: const InputDecoration(
+                        hintText: 'Add a comment...',
+                        counterText: '',
+                      ),
                     ),
                   ),
-                  IconButton(icon: const Icon(Icons.send), onPressed: _submit),
+                  IconButton(
+                    icon: const Icon(Icons.send),
+                    onPressed: _isSending ? null : _submit,
+                  ),
                 ],
               ),
             ),

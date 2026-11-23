@@ -1,12 +1,16 @@
 import 'package:android_dev/screens/home_screen/models/post_model.dart';
 import 'package:android_dev/screens/content/comments_sheet.dart';
+import 'package:android_dev/widgets/user_avatar.dart';
 import 'package:material_ui/material_ui.dart';
 
 class PostWidget extends StatelessWidget {
   final PostModel post;
   final VoidCallback onLike;
 
-  const PostWidget({super.key, required this.post, required this.onLike});
+  /// Shown as a menu entry when set (only for the author's own posts).
+  final VoidCallback? onDelete;
+
+  const PostWidget({super.key, required this.post, required this.onLike, this.onDelete});
 
   void openBottomSheet(BuildContext context) {
     showModalBottomSheet<void>(
@@ -29,11 +33,27 @@ class PostWidget extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.all(8),
-              child: Text(post.authorName, style: const TextStyle(fontWeight: FontWeight.bold)),
+              child: Row(children: [
+                UserAvatar(name: post.authorName, imageUrl: post.authorAvatarUrl, radius: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(post.authorName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                if (onDelete != null)
+                  PopupMenuButton<void>(
+                    icon: const Icon(Icons.more_vert),
+                    itemBuilder: (context) => [
+                      PopupMenuItem(onTap: onDelete, child: const Text('Delete post')),
+                    ],
+                  ),
+              ]),
             ),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.network(post.imageUrl, width: double.infinity, fit: BoxFit.cover),
+            GestureDetector(
+              onDoubleTap: post.isLiked ? null : onLike,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(post.imageUrl, width: double.infinity, fit: BoxFit.cover),
+              ),
             ),
             Row(children: [
               IconButton(
@@ -43,6 +63,7 @@ class PostWidget extends StatelessWidget {
               ),
               Text('${post.likeCount}'),
               IconButton(icon: const Icon(Icons.comment), onPressed: () => openBottomSheet(context)),
+              Text('${post.commentCount}'),
               IconButton(icon: const Icon(Icons.share), onPressed: () {}),
               const Spacer(),
               IconButton(icon: const Icon(Icons.bookmark_border), onPressed: () {}),
